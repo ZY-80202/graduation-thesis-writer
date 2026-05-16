@@ -1,0 +1,4 @@
+interface:
+  display_name: "毕业论文生成"
+  short_description: "从模板、上一届论文和项目资料生成毕业设计 Word 初稿"
+  default_prompt: "帮我使用毕业论文生成 Skill，根据学校模板、上一届论文和项目资料生成毕业设计论文 Word、图表和缺失项报告。"

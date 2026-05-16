@@ -1,0 +1,34 @@
+thesis:
+  title: "基于项目资料的毕业设计说明书"
+  author: "请填写作者姓名"
+  student_id: "请填写学号"
+  college: "请填写学院"
+  major: "请填写专业"
+  supervisor: "请填写指导教师"
+  project_name: "请填写项目名称"
+  keywords:
+    - "毕业设计"
+    - "系统设计"
+    - "软件开发"
+
+project:
+  technology_stack: []
+  generate_diagrams: true
+  insert_screenshots: true
+  generate_references: true
+
+numbering:
+  figure_rule: "图 {chapter}-{index} {caption}"
+  table_rule: "表 {chapter}-{index} {caption}"
+
+format:
+  chinese_font: "宋体"
+  english_font: "Times New Roman"
+  body_font_size_pt: 12
+  heading1_font_size_pt: 16
+  heading2_font_size_pt: 14
+  line_spacing: 1.5
+  first_line_indent_chars: 2
+
+chapters:
+  use_default_outline: true
