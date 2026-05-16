@@ -9,13 +9,13 @@
 克隆到 Codex skills 目录即可：
 
 ```bash
-git clone https://github.com/<your-name>/graduation-thesis-writer.git ~/.codex/skills/graduation-thesis-writer
+git clone https://github.com/ZY-80202/graduation-thesis-writer.git ~/.codex/skills/graduation-thesis-writer
 ```
 
 Windows PowerShell 示例：
 
 ```powershell
-git clone https://github.com/<your-name>/graduation-thesis-writer.git $env:USERPROFILE\.codex\skills\graduation-thesis-writer
+git clone https://github.com/ZY-80202/graduation-thesis-writer.git $env:USERPROFILE\.codex\skills\graduation-thesis-writer
 ```
 
 安装后重启或刷新 Codex，然后可以直接说：
@@ -55,7 +55,7 @@ py -m graduation_thesis_writer --help
 
 ```text
 inputs/
-├── template.docx
+├── template.docx / template.doc
 ├── previous.docx
 ├── previous.pdf
 └── project/
@@ -115,6 +115,26 @@ python -m graduation_thesis_writer build \
   --out outputs/final_thesis.docx
 ```
 
+严格复刻模板封面、分节和页眉页脚，并做渲染校验：
+
+```bash
+python -m graduation_thesis_writer build \
+  --template inputs/template.doc \
+  --project inputs/project/ \
+  --config config.yaml \
+  --out outputs/final_thesis.docx \
+  --strict-template \
+  --render-check \
+  --max-pages 35 \
+  --toc-mode static \
+  --cover-pages 2 \
+  --body-start-title "概述" \
+  --no-number-front-matter \
+  --black-white-diagrams
+```
+
+如果 `--render-check` 发现阻断问题，工具会保留 `outputs/final_thesis_draft.docx` 或你指定输出名对应的 `_draft.docx`，并写出 `outputs/render_check_report.md`，不会把该草稿当作最终版通过。
+
 检查论文格式：
 
 ```bash
@@ -134,6 +154,9 @@ python -m graduation_thesis_writer validate --docx outputs/final_thesis.docx --t
 - `outputs/content_gap_report.md`：内容缺失项提醒；
 - `outputs/missing_items.md`：需要人工补充的内容；
 - `outputs/format_check_report.md`：格式检查报告；
+- `outputs/render_check_report.md`：LibreOffice/PDF/PNG 渲染视觉检查报告；
+- `outputs/reference_check_report.md`：GB/T 7714—2015 参考文献格式检查报告；
+- `outputs/length_report.md`：正文篇幅估算与压缩报告；
 - `outputs/plagiarism_risk_report.md`：查重风险提醒。
 
 ## 配置
@@ -151,7 +174,15 @@ thesis:
   major: "软件工程"
   supervisor: "李老师"
   project_name: "校园二手交易系统"
+  class_name: "软件工程 1 班"
+  date_range: "2024 年 10 月 10 日～2025 年 5 月 10 日"
+
+cover_replacements:
+  "基于 springboot 的宠物领养系统": "校园二手交易系统的设计与实现"
+  "2250202337": "2024000001"
 ```
+
+`cover_replacements` 会直接在模板 OOXML 中替换文字，适合封面字段在表格、文本框或复杂排版中的情况；工具不会重新绘制封面。
 
 ## 当前 MVP 能力
 
@@ -159,21 +190,27 @@ thesis:
 - 读取上一届 Word/PDF，提取目录、章节层级和图表编号规律；
 - 读取项目资料，识别技术栈、模块、角色、数据表、接口、截图和测试点；
 - 根据 `database.sql` 自动整理数据库设计章节，并生成字段说明表；
+- 支持 `database.sql`、`init.sql`、`schema.sql`，提取字段名、类型、长度、主键、可空、默认值和注释；
 - 根据 `source_code/backend/` 中的路由文件生成接口设计表；
 - 根据 `source_code/frontend/` 中的页面文件生成系统功能页面表；
 - 根据 `screenshots/` 图片名称自动匹配功能章节并插入 Word；
 - 用户用例图和管理员用例图采用 UML 风格：左侧角色小人、右侧系统边界、内部椭圆用例和箭头连线；
 - 自动生成七章式毕业设计目录，可根据项目模块替换第 5 章小节；
 - 自动生成系统架构图、功能结构图、业务流程图、ER 图、交互流程图和测试流程图；
-- 基于学校模板样式生成 Word 文档，并插入目录域、图、表和待补充标记；
+- 严格模板模式下直接克隆模板前置页 OOXML，尽量保留校徽、下划线、文本框、表格、页脚和分节；
+- 生成摘要、目录前置页时不参与正文编号，正文从 `1 概述` 开始并重启阿拉伯页码；
+- 基于学校模板样式生成 Word 文档，并插入目录域或静态点引导符目录、图、表和待补充标记；
+- 自动控制篇幅，默认按 25～35 页目标压缩过长章节；
 - 输出格式检查、内容缺失项和查重风险报告。
 
 ## 简化说明与后续增强
 
 当前版本优先保证可运行和可重复生成，因此部分能力是简化实现：
 
-- 模板封面会继承模板样式和页面设置，但不会智能填充复杂封面控件；
-- Word 目录插入为可更新目录域，需要在 Word 中右键更新域；
+- `.doc` 模板转换依赖 LibreOffice；没有 LibreOffice 时请先手动另存为 `.docx`；
+- 严格模板克隆依赖模板自身的分页符或分节符，如果模板封面没有清晰分页，可能需要通过 `--cover-pages` 调整；
+- `--toc-mode field` 会插入 Word 可更新目录域；`--toc-mode static` 会生成带点引导符和页码占位的静态目录；
+- 渲染校验依赖 LibreOffice 和 PyMuPDF，未安装时会在报告中提示；
 - 图表为黑白简洁风格，适合论文初稿，复杂 ER 关系需要结合实际外键继续完善；
 - 正文生成是基于项目资料的规则化草稿，不会替代人工核对、补充截图和参考文献；
 - 格式检查覆盖基础项，学校特定格式细则可继续扩展到 `format_validator.py`。

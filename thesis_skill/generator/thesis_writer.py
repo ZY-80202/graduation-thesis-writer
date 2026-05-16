@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from thesis_skill.analyzer.content_gap_checker import write_content_gap_report, write_missing_items_report
+from thesis_skill.generator.length_controller import enforce_page_budget, generate_length_report
+from thesis_skill.generator.reference_generator import normalize_references
 from thesis_skill.generator.section_generator import collect_placeholders, generate_sections
 from thesis_skill.models import OutlineSection, ProjectProfile, ThesisDocument
 from thesis_skill.utils.file_utils import ensure_dir, read_json, write_json
@@ -33,13 +35,17 @@ def build_thesis_draft(
         abstract_en=_abstract_en(project_name, project),
         keywords=keywords,
         sections=sections,
-        references=_references(config),
+        references=normalize_references(_references(config), project.technology_stack),
         acknowledgements=_acknowledgements(),
         appendices=["主要代码片段、配置文件或补充截图可放入附录。【请按学校要求补充】"],
         placeholders=collect_placeholders(sections),
     )
+    max_pages = int(config.get("format", {}).get("max_pages", config.get("max_pages", 35)))
+    document = enforce_page_budget(document, max_pages=max_pages)
+    document.placeholders = collect_placeholders(document.sections)
     ensure_dir(output_dir)
     write_json(Path(output_dir) / "thesis_draft.json", document)
+    generate_length_report(document, output_dir, max_pages=max_pages)
     write_content_gap_report(project, output_dir)
     write_missing_items_report(project, output_dir)
     return document

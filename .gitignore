@@ -8,6 +8,8 @@ outputs/*
 !outputs/.gitkeep
 !outputs/diagrams/
 !outputs/profiles/
+outputs/diagrams/*
+outputs/profiles/*
 !outputs/diagrams/.gitkeep
 !outputs/profiles/.gitkeep
 inputs/*

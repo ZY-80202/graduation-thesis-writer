@@ -38,7 +38,7 @@ Preferred layout in the user's workspace:
 
 ```text
 inputs/
-|-- template.docx
+|-- template.docx or template.doc
 |-- previous.docx
 |-- previous.pdf
 `-- project/
@@ -71,19 +71,43 @@ py -m graduation_thesis_writer build `
   --previous-docx inputs/previous.docx `
   --previous-pdf inputs/previous.pdf `
   --project inputs/project/ `
-  --out outputs/final_thesis.docx
+  --out outputs/final_thesis.docx `
+  --strict-template `
+  --toc-mode static
 ```
 
 Omit --previous-pdf if no PDF is available.
 
-4. Tell the user to open Word and update the TOC field manually.
-5. Review these outputs with the user:
+4. For strict school-template reproduction, prefer:
+
+```powershell
+$env:PYTHONPATH="C:\Users\t1937\.codex\skills\graduation-thesis-writer\scripts\thesis_tool"
+py -m graduation_thesis_writer build `
+  --template inputs/template.doc `
+  --project inputs/project/ `
+  --config config.yaml `
+  --out outputs/final_thesis.docx `
+  --strict-template `
+  --render-check `
+  --max-pages 35 `
+  --toc-mode static `
+  --cover-pages 2 `
+  --body-start-title "概述" `
+  --no-number-front-matter `
+  --black-white-diagrams
+```
+
+5. If using `--toc-mode field`, tell the user to open Word and update the TOC field manually. If `--render-check` fails, inspect the generated `_draft.docx` and reports instead of treating it as final.
+6. Review these outputs with the user:
 
 ```text
 outputs/final_thesis.docx
 outputs/missing_items.md
 outputs/content_gap_report.md
 outputs/format_check_report.md
+outputs/render_check_report.md
+outputs/reference_check_report.md
+outputs/length_report.md
 outputs/plagiarism_risk_report.md
 outputs/profiles/project_profile.json
 outputs/diagrams/
@@ -92,13 +116,16 @@ outputs/diagrams/
 ## Capabilities
 
 - Extract school template page settings, header/footer text, styles, and region keywords.
+- In strict-template mode, clone the template cover/front matter OOXML instead of redrawing it, preserving logos, underlines, tables, text boxes, footers, and section settings where possible.
 - Extract previous thesis outline and figure/table numbering patterns without reusing body text.
-- Parse database.sql into database tables and field-detail tables with field name, type, primary key, nullable, default, and comment.
+- Parse database.sql/init.sql/schema.sql into database tables and field-detail tables with field name, type, length, primary key, nullable, default, and comment.
 - Extract API design rows from route/controller files in source_code/backend.
 - Extract frontend page rows from page files in source_code/frontend.
 - Classify screenshots by filename and insert them into matching sections with continuous figure captions.
 - Generate user/admin UML-style use case diagrams with a stick-figure actor, system boundary rectangle, oval use cases, and arrowed associations.
 - Generate black-and-white PNG/SVG/Mermaid diagrams and Word table captions.
+- Keep abstract/table of contents unnumbered, start body at `1 概述`, restart Arabic body page numbering, and generate either a Word TOC field or a static dot-leader TOC.
+- Run optional LibreOffice/PyMuPDF render checks and emit render_check_report.md.
 - Emit missing_items.md for fields, screenshots, interface details, tests, references, and other content requiring human completion.
 
 ## Useful Commands

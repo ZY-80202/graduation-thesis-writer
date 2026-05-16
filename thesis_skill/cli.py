@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -9,13 +10,16 @@ from thesis_skill.analyzer.outline_mapper import build_outline
 from thesis_skill.analyzer.previous_thesis_analyzer import analyze_previous
 from thesis_skill.analyzer.template_analyzer import analyze_template
 from thesis_skill.docx_writer.docx_builder import build_docx
+from thesis_skill.docx_writer.numbering_manager import normalize_outline_numbering
+from thesis_skill.docx_writer.template_clone import prepare_template_docx
 from thesis_skill.generator.diagram_generator import generate_diagrams
 from thesis_skill.generator.thesis_writer import build_thesis_draft
-from thesis_skill.models import DiagramArtifact, OutlineSection, ProjectProfile, TemplateProfile
+from thesis_skill.models import DiagramArtifact, ProjectProfile
 from thesis_skill.parsers.project_parser import parse_project
-from thesis_skill.utils.file_utils import ensure_dir, read_json, write_json
+from thesis_skill.utils.file_utils import ensure_dir, read_json
 from thesis_skill.validators.format_validator import validate_docx
 from thesis_skill.validators.plagiarism_guard import check_plagiarism_risk
+from thesis_skill.validators.render_validator import validate_rendered_docx
 
 try:
     from rich.console import Console
@@ -65,11 +69,13 @@ def build_parser() -> argparse.ArgumentParser:
     build_outline_cmd.add_argument("--previous")
     build_outline_cmd.add_argument("--project", required=True)
     build_outline_cmd.add_argument("--out", default="outputs/profiles")
+    build_outline_cmd.add_argument("--body-start-title", default="概述")
     build_outline_cmd.set_defaults(func=cmd_build_outline)
 
     build_diagrams = sub.add_parser("build-diagrams", help="生成流程图和结构图")
     build_diagrams.add_argument("--project", required=True)
     build_diagrams.add_argument("--out", default="outputs/diagrams")
+    build_diagrams.add_argument("--black-white-diagrams", action="store_true", help="使用黑白论文图风格")
     build_diagrams.set_defaults(func=cmd_build_diagrams)
 
     build = sub.add_parser("build", help="生成完整论文 Word")
@@ -78,18 +84,29 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--previous-pdf")
     build.add_argument("--project", required=True)
     build.add_argument("--out", default="outputs/final_thesis.docx")
+    build.add_argument("--strict-template", action="store_true", help="强制复用模板封面、样式、页眉页脚和分节")
+    build.add_argument("--render-check", action="store_true", help="生成后调用 LibreOffice/PyMuPDF 做渲染视觉检查")
+    build.add_argument("--max-pages", type=int, default=35, help="最大页数，默认 35")
+    build.add_argument("--toc-mode", choices=["field", "static"], default="field", help="目录模式: Word 域或静态点引导符目录")
+    build.add_argument("--cover-pages", type=int, default=2, help="模板前几页作为封面/起讫日期页复制")
+    build.add_argument("--body-start-title", default="概述", help="正文第一章标题")
+    build.add_argument("--no-number-front-matter", action="store_true", help="前置部分不编号")
+    build.add_argument("--black-white-diagrams", action="store_true", help="流程图使用黑白风格")
     build.set_defaults(func=cmd_build)
 
     validate = sub.add_parser("validate", help="检查论文格式")
     validate.add_argument("--docx", required=True)
     validate.add_argument("--template")
     validate.add_argument("--out", default="outputs")
+    validate.add_argument("--render-check", action="store_true")
+    validate.add_argument("--max-pages", type=int, default=35)
     validate.set_defaults(func=cmd_validate)
     return parser
 
 
 def cmd_inspect_template(args: argparse.Namespace) -> None:
-    profile = analyze_template(args.template, args.out)
+    template = prepare_template_docx(args.template)
+    profile = analyze_template(template, args.out)
     _ok(f"模板分析完成: {Path(args.out) / 'template_profile.json'}")
     _json_hint(profile)
 
@@ -107,10 +124,12 @@ def cmd_inspect_project(args: argparse.Namespace) -> None:
 
 
 def cmd_build_outline(args: argparse.Namespace) -> None:
-    template_profile = analyze_template(args.template, args.out)
+    template = prepare_template_docx(args.template)
+    template_profile = analyze_template(template, args.out)
     previous_profile = analyze_previous(args.previous, None, args.out) if args.previous else None
     project_profile = parse_project(args.project, args.out)
     outline = build_outline(template_profile, previous_profile, project_profile, args.out)
+    outline = normalize_outline_numbering(outline, body_start_title=args.body_start_title)
     _ok(f"论文大纲生成完成: {Path(args.out) / 'outline.json'}")
     _info(f"一级章节数: {len(outline)}")
 
@@ -124,26 +143,61 @@ def cmd_build_diagrams(args: argparse.Namespace) -> None:
 
 def cmd_build(args: argparse.Namespace) -> None:
     config = load_config(args.config)
+    config.setdefault("format", {})["max_pages"] = args.max_pages
     ensure_dir("outputs/profiles")
     ensure_dir("outputs/diagrams")
-    template_profile = analyze_template(args.template, "outputs/profiles")
+
+    template = prepare_template_docx(args.template)
+    template_profile = analyze_template(template, "outputs/profiles")
     previous_profile = analyze_previous(args.previous_docx, args.previous_pdf, "outputs/profiles") if args.previous_docx or args.previous_pdf else None
     project_profile = parse_project(args.project, "outputs/profiles")
     outline = build_outline(template_profile, previous_profile, project_profile, "outputs/profiles")
+    outline = normalize_outline_numbering(outline, body_start_title=args.body_start_title)
+
     diagrams: List[DiagramArtifact] = []
     if config.get("project", {}).get("generate_diagrams", True):
         diagrams = generate_diagrams(project_profile, "outputs/diagrams")
+
     thesis = build_thesis_draft(project_profile, outline, config, "outputs")
-    out_path = build_docx(args.template, thesis, project_profile, diagrams, args.out, config)
-    validate_docx(out_path, args.template, "outputs")
+    requested_out = Path(args.out)
+    build_target = _draft_path(requested_out) if args.render_check else requested_out
+    out_path = build_docx(
+        template,
+        thesis,
+        project_profile,
+        diagrams,
+        build_target,
+        config,
+        strict_template=args.strict_template,
+        cover_pages=args.cover_pages,
+        toc_mode=args.toc_mode,
+        body_start_title=args.body_start_title,
+        max_pages=args.max_pages,
+    )
+
+    validate_docx(out_path, template, "outputs")
+    render_issues = validate_rendered_docx(out_path, "outputs", max_pages=args.max_pages) if args.render_check else []
+    blocking = [issue for issue in render_issues if issue.severity == "error"]
     if args.previous_docx or args.previous_pdf:
         check_plagiarism_risk(out_path, args.previous_docx, args.previous_pdf, "outputs")
+
+    if args.render_check and blocking:
+        _error(f"渲染检查未通过，已保留草稿: {out_path}")
+        _info("请查看 outputs/render_check_report.md 和 outputs/format_check_report.md")
+        return
+    if args.render_check:
+        ensure_dir(requested_out.parent)
+        shutil.copy2(out_path, requested_out)
+        out_path = requested_out
+
     _ok(f"完整论文生成完成: {out_path}")
-    _info("已生成 outputs/thesis_draft.json、outputs/content_gap_report.md、outputs/missing_items.md、outputs/format_check_report.md")
+    _info("已生成 outputs/thesis_draft.json、outputs/missing_items.md、outputs/content_gap_report.md、outputs/format_check_report.md")
 
 
 def cmd_validate(args: argparse.Namespace) -> None:
     report = validate_docx(args.docx, args.template, args.out)
+    if args.render_check:
+        validate_rendered_docx(args.docx, args.out, max_pages=args.max_pages)
     _ok(f"格式检查完成: {Path(args.out) / 'format_check_report.md'}")
     _info(report.summary)
 
@@ -166,15 +220,14 @@ def load_config(path: str | Path) -> Dict[str, Any]:
 def _tiny_yaml(text: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     current: Dict[str, Any] | None = None
-    current_key = ""
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line.strip() or line.strip().startswith("#"):
             continue
         if not line.startswith(" ") and line.endswith(":"):
-            current_key = line[:-1].strip()
-            result[current_key] = {}
-            current = result[current_key]
+            key = line[:-1].strip()
+            result[key] = {}
+            current = result[key]
         elif current is not None and ":" in line:
             key, value = line.strip().split(":", 1)
             current[key.strip()] = value.strip().strip('"').strip("'")
@@ -191,6 +244,10 @@ def _project_from_path_or_profile(path: str | Path) -> ProjectProfile:
             return ProjectProfile(**read_json(profile_path))
         return parse_project(value, "outputs/profiles")
     raise FileNotFoundError(f"项目目录或 project_profile.json 不存在: {value}")
+
+
+def _draft_path(path: Path) -> Path:
+    return path.with_name(f"{path.stem}_draft{path.suffix}")
 
 
 def _json_hint(value: Any) -> None:

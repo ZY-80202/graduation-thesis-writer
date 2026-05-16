@@ -62,6 +62,26 @@ def generate_diagrams(
     return artifacts
 
 
+def generate_use_case_diagram(project_profile: ProjectProfile | Dict | str | Path, output_dir: str | Path = "outputs/diagrams") -> DiagramArtifact:
+    return _artifact_by_key(generate_diagrams(project_profile, output_dir), "user_flow")
+
+
+def generate_function_structure_diagram(project_profile: ProjectProfile | Dict | str | Path, output_dir: str | Path = "outputs/diagrams") -> DiagramArtifact:
+    return _artifact_by_key(generate_diagrams(project_profile, output_dir), "function_structure")
+
+
+def generate_system_architecture_diagram(project_profile: ProjectProfile | Dict | str | Path, output_dir: str | Path = "outputs/diagrams") -> DiagramArtifact:
+    return _artifact_by_key(generate_diagrams(project_profile, output_dir), "architecture")
+
+
+def generate_business_flow_diagram(project_profile: ProjectProfile | Dict | str | Path, output_dir: str | Path = "outputs/diagrams") -> DiagramArtifact:
+    return _artifact_by_key(generate_diagrams(project_profile, output_dir), "business_flow")
+
+
+def generate_er_diagram_from_sql(project_profile: ProjectProfile | Dict | str | Path, output_dir: str | Path = "outputs/diagrams") -> DiagramArtifact:
+    return _artifact_by_key(generate_diagrams(project_profile, output_dir), "er")
+
+
 def _architecture(project: ProjectProfile) -> Tuple[List[Box], List[Line], str]:
     boxes = [
         (260, 70, 620, 130, "表示层\n前端页面/用户交互"),
@@ -374,3 +394,10 @@ def _as_project_profile(value: ProjectProfile | Dict | str | Path) -> ProjectPro
     if isinstance(value, (str, Path)):
         value = read_json(value)
     return ProjectProfile(**value)
+
+
+def _artifact_by_key(artifacts: List[DiagramArtifact], key: str) -> DiagramArtifact:
+    for artifact in artifacts:
+        if artifact.key == key:
+            return artifact
+    raise KeyError(f"diagram artifact not found: {key}")

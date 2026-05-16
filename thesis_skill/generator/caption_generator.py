@@ -5,7 +5,7 @@ from typing import DefaultDict
 
 
 class CaptionGenerator:
-    def __init__(self, figure_rule: str = "图 {chapter}-{index} {caption}", table_rule: str = "表 {chapter}-{index} {caption}") -> None:
+    def __init__(self, figure_rule: str = "图 {chapter}.{index} {caption}", table_rule: str = "表 {chapter}.{index} {caption}") -> None:
         self.figure_rule = figure_rule
         self.table_rule = table_rule
         self.figure_counts: DefaultDict[int, int] = defaultdict(int)
