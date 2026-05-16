@@ -97,6 +97,7 @@ outputs/diagrams/
 - Extract API design rows from route/controller files in source_code/backend.
 - Extract frontend page rows from page files in source_code/frontend.
 - Classify screenshots by filename and insert them into matching sections with continuous figure captions.
+- Generate user/admin UML-style use case diagrams with a stick-figure actor, system boundary rectangle, oval use cases, and arrowed associations.
 - Generate black-and-white PNG/SVG/Mermaid diagrams and Word table captions.
 - Emit missing_items.md for fields, screenshots, interface details, tests, references, and other content requiring human completion.
 
