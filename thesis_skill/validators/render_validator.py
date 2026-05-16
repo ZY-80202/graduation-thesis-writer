@@ -60,19 +60,26 @@ def validate_rendered_docx(
     docx_path: str | Path,
     output_dir: str | Path = "outputs",
     max_pages: int = 35,
+    min_pages: int | None = None,
+    match_pdf_layout: bool = False,
 ) -> List[ValidationIssue]:
     issues: List[ValidationIssue] = []
+    pdf_text = ""
     try:
         pdf = render_docx_to_pdf(docx_path, Path(output_dir) / "rendered")
-        render_pdf_to_png(pdf, Path(output_dir) / "rendered" / "pages")
-        issues.extend(validate_page_count(pdf, max_pages=max_pages))
+        render_pdf_to_png(pdf, Path(output_dir) / "rendered" / "pages", pages=_first_last_pages(pdf, 5))
+        issues.extend(validate_page_count(pdf, max_pages=max_pages, min_pages=min_pages))
+        pdf_text = _pdf_text(pdf)
     except Exception as exc:
         issues.append(ValidationIssue(severity="warning", message=str(exc), location="渲染"))
 
     document = Document(str(docx_path))
-    issues.extend(validate_cover_visual(document))
-    issues.extend(validate_abstract_not_numbered(document))
-    issues.extend(validate_toc_visual(document))
+    if match_pdf_layout:
+        issues.extend(validate_pdf_reference_layout(document, pdf_text))
+    else:
+        issues.extend(validate_cover_visual(document))
+        issues.extend(validate_abstract_not_numbered(document))
+        issues.extend(validate_toc_visual(document))
     issues.extend(validate_header_footer_by_page(document))
     issues.extend(validate_image_overflow(document))
     write_render_report(issues, output_dir)
@@ -110,7 +117,7 @@ def validate_toc_visual(document) -> List[ValidationIssue]:
     return issues
 
 
-def validate_page_count(pdf_path: str | Path, max_pages: int = 35) -> List[ValidationIssue]:
+def validate_page_count(pdf_path: str | Path, max_pages: int = 35, min_pages: int | None = None) -> List[ValidationIssue]:
     try:
         import fitz  # type: ignore
 
@@ -121,7 +128,41 @@ def validate_page_count(pdf_path: str | Path, max_pages: int = 35) -> List[Valid
         return []
     if count > max_pages:
         return [ValidationIssue(severity="error", message=f"渲染页数为 {count} 页，超过最大限制 {max_pages} 页。", location="全文")]
+    if min_pages is not None and count < min_pages:
+        return [ValidationIssue(severity="error", message=f"渲染页数为 {count} 页，低于最小要求 {min_pages} 页。", location="全文")]
     return []
+
+
+def validate_pdf_reference_layout(document, pdf_text: str = "") -> List[ValidationIssue]:
+    paragraph_texts = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
+    text = "\n".join(paragraph_texts)
+    issues: List[ValidationIssue] = []
+    required = [
+        ("毕业设计说明书", "第 1 页封面标题"),
+        ("毕业设计诚信声明", "第 2 页诚信声明"),
+        ("目 录", "第 3 页目录标题"),
+        ("一、项目概述", "正文起始标题"),
+        ("（一）背景意义", "中文二级标题"),
+        ("参考文献", "参考文献标题"),
+        ("致谢", "致谢标题"),
+    ]
+    for needle, label in required:
+        if needle not in text:
+            issues.append(ValidationIssue(severity="error", message=f"缺少{label}: {needle}", location="PDF版式"))
+    if re.search(r"(^|\n)\s*1\s+项目概述", text):
+        issues.append(ValidationIssue(severity="error", message="正文出现错误阿拉伯编号“1 项目概述”。", location="正文编号"))
+    toc_text = _docx_toc_text(paragraph_texts)
+    if "." * 6 not in toc_text and "…" not in toc_text:
+        issues.append(ValidationIssue(severity="error", message="目录缺少点引导符。", location="目录"))
+    if not re.search(r"一、项目概述\.{4,}\d+", toc_text):
+        issues.append(ValidationIssue(severity="error", message="目录缺少页码。", location="目录"))
+    if "六、总结" in text and "参考文献" in text and text.rfind("六、总结") > text.rfind("参考文献"):
+        issues.append(ValidationIssue(severity="error", message="参考文献出现在总结之前，章节顺序错误。", location="参考文献"))
+    if pdf_text:
+        first_pages = "\n".join(pdf_text.split("\f")[:2])
+        if "一、项目概述" in first_pages:
+            issues.append(ValidationIssue(severity="error", message="正文疑似与封面/声明/目录粘连。", location="前置页"))
+    return issues
 
 
 def validate_header_footer_by_page(document) -> List[ValidationIssue]:
@@ -161,3 +202,41 @@ def write_render_report(issues: List[ValidationIssue], output_dir: str | Path) -
     path = Path(output_dir) / "render_check_report.md"
     write_text(path, "\n".join(lines) + "\n")
     return path
+
+
+def _first_last_pages(pdf_path: Path, count: int) -> List[int]:
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open(str(pdf_path))
+        total = doc.page_count
+        doc.close()
+        return sorted(set(list(range(min(count, total))) + list(range(max(0, total - count), total))))
+    except Exception:
+        return []
+
+
+def _pdf_text(pdf_path: Path) -> str:
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open(str(pdf_path))
+        pages = [page.get_text("text") for page in doc]
+        doc.close()
+        return "\f".join(pages)
+    except Exception:
+        return ""
+
+
+def _docx_toc_text(paragraph_texts: List[str]) -> str:
+    try:
+        start = next(index for index, value in enumerate(paragraph_texts) if value in {"目 录", "目    录", "目录"})
+    except StopIteration:
+        return ""
+    lines: List[str] = []
+    for value in paragraph_texts[start + 1 :]:
+        if value.startswith("一、项目概述") and "." not in value and "…" not in value:
+            break
+        if value.startswith(("一、", "二、", "三、", "四、", "五、", "六、", "（", "参考文献", "致谢")):
+            lines.append(value)
+    return "\n".join(lines)

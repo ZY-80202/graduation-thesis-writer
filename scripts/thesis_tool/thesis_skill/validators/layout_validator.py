@@ -12,8 +12,8 @@ from thesis_skill.models import ValidationIssue
 def validate_figure_references(docx_path: str | Path) -> List[ValidationIssue]:
     document = Document(str(docx_path))
     text = "\n".join(paragraph.text for paragraph in document.paragraphs)
-    captions = set(re.findall(r"(图\s*\d+\.\d+)", text))
-    references = set(re.findall(r"如\s*(图\s*\d+\.\d+)\s*所示", text))
+    captions = set(re.findall(r"(图\s*\d+[-.]\d+)", text))
+    references = set(re.findall(r"如\s*(图\s*\d+[-.]\d+)\s*所示", text))
     issues: List[ValidationIssue] = []
     for caption in sorted(captions - references):
         issues.append(ValidationIssue(severity="warning", message=f"{caption} 已插入但正文未明确引用。", location="图题"))
@@ -25,8 +25,8 @@ def validate_figure_references(docx_path: str | Path) -> List[ValidationIssue]:
 def validate_table_references(docx_path: str | Path) -> List[ValidationIssue]:
     document = Document(str(docx_path))
     text = "\n".join(paragraph.text for paragraph in document.paragraphs)
-    captions = set(re.findall(r"(表\s*\d+\.\d+)", text))
-    references = set(re.findall(r"如\s*(表\s*\d+\.\d+)\s*所示", text))
+    captions = set(re.findall(r"(表\s*\d+[-.]\d+)", text))
+    references = set(re.findall(r"如\s*(表\s*\d+[-.]\d+)\s*所示", text))
     issues: List[ValidationIssue] = []
     for caption in sorted(captions - references):
         issues.append(ValidationIssue(severity="info", message=f"{caption} 已插入，正文可补充引用语句。", location="表题"))

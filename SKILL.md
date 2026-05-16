@@ -92,13 +92,30 @@ py -m graduation_thesis_writer build `
   --max-pages 35 `
   --toc-mode static `
   --cover-pages 2 `
-  --body-start-title "概述" `
   --no-number-front-matter `
   --black-white-diagrams
 ```
 
-5. If using `--toc-mode field`, tell the user to open Word and update the TOC field manually. If `--render-check` fails, inspect the generated `_draft.docx` and reports instead of treating it as final.
-6. Review these outputs with the user:
+5. For a previous-PDF layout match, especially website theses that use Chinese numbering and many screenshots/code screenshots, use:
+
+```powershell
+$env:PYTHONPATH="C:\Users\t1937\.codex\skills\graduation-thesis-writer\scripts\thesis_tool"
+py -m graduation_thesis_writer build `
+  --template-reference reference.pdf `
+  --project inputs/project `
+  --config config.yaml `
+  --out outputs/final_thesis.docx `
+  --match-pdf-layout `
+  --target-pages 28 `
+  --toc-with-page-numbers `
+  --chinese-section-numbering `
+  --image-heavy-implementation
+```
+
+This mode creates the reference-style cover, an independent integrity statement page, a static dot-leader TOC with page numbers, Chinese section headings, and an image-heavy implementation chapter. It must not copy body text from the reference PDF.
+
+6. If using `--toc-mode field`, tell the user to open Word and update the TOC field manually. If render/layout checks fail, inspect the generated `_draft.docx` and reports instead of treating it as final.
+7. Review these outputs with the user:
 
 ```text
 outputs/final_thesis.docx
@@ -108,6 +125,7 @@ outputs/format_check_report.md
 outputs/render_check_report.md
 outputs/reference_check_report.md
 outputs/length_report.md
+outputs/profiles/reference_layout_profile.json
 outputs/plagiarism_risk_report.md
 outputs/profiles/project_profile.json
 outputs/diagrams/
@@ -117,6 +135,7 @@ outputs/diagrams/
 
 - Extract school template page settings, header/footer text, styles, and region keywords.
 - In strict-template mode, clone the template cover/front matter OOXML instead of redrawing it, preserving logos, underlines, tables, text boxes, footers, and section settings where possible.
+- In PDF layout mode, parse reference.pdf into reference_layout_profile.json and match cover/front matter, Chinese heading numbering, static TOC, figure/table caption style, and image-heavy implementation layout.
 - Extract previous thesis outline and figure/table numbering patterns without reusing body text.
 - Parse database.sql/init.sql/schema.sql into database tables and field-detail tables with field name, type, length, primary key, nullable, default, and comment.
 - Extract API design rows from route/controller files in source_code/backend.
@@ -125,6 +144,8 @@ outputs/diagrams/
 - Generate user/admin UML-style use case diagrams with a stick-figure actor, system boundary rectangle, oval use cases, and arrowed associations.
 - Generate black-and-white PNG/SVG/Mermaid diagrams and Word table captions.
 - Keep abstract/table of contents unnumbered, start body at `1 概述`, restart Arabic body page numbering, and generate either a Word TOC field or a static dot-leader TOC.
+- For website projects, generate the fixed Chinese-numbered body structure, plus independent references and acknowledgements, with detailed database tables and testing tables.
+- Map screenshots and code screenshots from `screenshots/` and `code_screenshots/`; preserve figure numbers with placeholders when files are missing and report them in missing_items.md.
 - Run optional LibreOffice/PyMuPDF render checks and emit render_check_report.md.
 - Emit missing_items.md for fields, screenshots, interface details, tests, references, and other content requiring human completion.
 

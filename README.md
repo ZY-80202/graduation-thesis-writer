@@ -133,6 +133,29 @@ python -m graduation_thesis_writer build \
   --black-white-diagrams
 ```
 
+按上一届 PDF 原始版式生成“中文编号 + 图文密集网站实现”版本：
+
+```bash
+python -m graduation_thesis_writer build \
+  --template-reference reference.pdf \
+  --project inputs/project \
+  --config config.yaml \
+  --out outputs/final_thesis.docx \
+  --match-pdf-layout \
+  --target-pages 28 \
+  --toc-with-page-numbers \
+  --chinese-section-numbering \
+  --image-heavy-implementation
+```
+
+该模式会生成：
+
+- 封面：`毕业设计说明书`、`题目：`、`“食惠零食批发网站”设计与实现`、提交时间、姓名、班级、系部、专业、指导教师；
+- 诚信声明页：独立成页；
+- 目录页：中文章节编号、点引导符和页码；
+- 正文：`一、项目概述`、`（一）背景意义` 这类中文编号；
+- 网站实现：按 `screenshots/` 与 `code_screenshots/` 自动插入界面图和核心代码图，缺失时插入占位符并写入 `missing_items.md`。
+
 如果 `--render-check` 发现阻断问题，工具会保留 `outputs/final_thesis_draft.docx` 或你指定输出名对应的 `_draft.docx`，并写出 `outputs/render_check_report.md`，不会把该草稿当作最终版通过。
 
 检查论文格式：
@@ -157,6 +180,7 @@ python -m graduation_thesis_writer validate --docx outputs/final_thesis.docx --t
 - `outputs/render_check_report.md`：LibreOffice/PDF/PNG 渲染视觉检查报告；
 - `outputs/reference_check_report.md`：GB/T 7714—2015 参考文献格式检查报告；
 - `outputs/length_report.md`：正文篇幅估算与压缩报告；
+- `outputs/profiles/reference_layout_profile.json`：参考 PDF 版式画像；
 - `outputs/plagiarism_risk_report.md`：查重风险提醒。
 
 ## 配置
@@ -198,7 +222,10 @@ cover_replacements:
 - 自动生成七章式毕业设计目录，可根据项目模块替换第 5 章小节；
 - 自动生成系统架构图、功能结构图、业务流程图、ER 图、交互流程图和测试流程图；
 - 严格模板模式下直接克隆模板前置页 OOXML，尽量保留校徽、下划线、文本框、表格、页脚和分节；
+- PDF 原始版对齐模式下，参考上一届 PDF 的封面、目录、中文编号、图题、表题和图文密度，不复制正文内容；
 - 生成摘要、目录前置页时不参与正文编号，正文从 `1 概述` 开始并重启阿拉伯页码；
+- 可生成面向网站类毕业设计的固定结构：项目概述、需求分析、网站设计、网站实现、网站测试、总结、参考文献、致谢；
+- 支持 `screenshots/` 和 `code_screenshots/` 中的页面截图/代码截图映射，缺失时保留图号与占位符；
 - 基于学校模板样式生成 Word 文档，并插入目录域或静态点引导符目录、图、表和待补充标记；
 - 自动控制篇幅，默认按 25～35 页目标压缩过长章节；
 - 输出格式检查、内容缺失项和查重风险报告。

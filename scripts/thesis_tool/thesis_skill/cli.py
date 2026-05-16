@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from thesis_skill.analyzer.outline_mapper import build_outline
+from thesis_skill.analyzer.pdf_reference_analyzer import analyze_pdf_reference
 from thesis_skill.analyzer.previous_thesis_analyzer import analyze_previous
 from thesis_skill.analyzer.template_analyzer import analyze_template
 from thesis_skill.docx_writer.docx_builder import build_docx
 from thesis_skill.docx_writer.numbering_manager import normalize_outline_numbering
+from thesis_skill.docx_writer.pdf_layout_builder import build_pdf_layout_docx
 from thesis_skill.docx_writer.template_clone import prepare_template_docx
 from thesis_skill.generator.diagram_generator import generate_diagrams
 from thesis_skill.generator.thesis_writer import build_thesis_draft
@@ -79,7 +81,8 @@ def build_parser() -> argparse.ArgumentParser:
     build_diagrams.set_defaults(func=cmd_build_diagrams)
 
     build = sub.add_parser("build", help="生成完整论文 Word")
-    build.add_argument("--template", required=True)
+    build.add_argument("--template")
+    build.add_argument("--template-reference", help="PDF 原始版参考文件，用于 match-pdf-layout 模式")
     build.add_argument("--previous-docx")
     build.add_argument("--previous-pdf")
     build.add_argument("--project", required=True)
@@ -92,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--body-start-title", default="概述", help="正文第一章标题")
     build.add_argument("--no-number-front-matter", action="store_true", help="前置部分不编号")
     build.add_argument("--black-white-diagrams", action="store_true", help="流程图使用黑白风格")
+    build.add_argument("--match-pdf-layout", action="store_true", help="按参考 PDF 原始版式生成封面、目录、中文章节和图文密集正文")
+    build.add_argument("--target-pages", type=int, default=28, help="PDF 对齐模式目标页数，默认 28")
+    build.add_argument("--toc-with-page-numbers", action="store_true", help="强制静态目录包含点引导符和页码")
+    build.add_argument("--chinese-section-numbering", action="store_true", help="使用“一、”“（一）”中文章节编号")
+    build.add_argument("--image-heavy-implementation", action="store_true", help="网站实现章节采用截图/代码图密集排版")
     build.set_defaults(func=cmd_build)
 
     validate = sub.add_parser("validate", help="检查论文格式")
@@ -100,6 +108,8 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--out", default="outputs")
     validate.add_argument("--render-check", action="store_true")
     validate.add_argument("--max-pages", type=int, default=35)
+    validate.add_argument("--min-pages", type=int)
+    validate.add_argument("--match-pdf-layout", action="store_true")
     validate.set_defaults(func=cmd_validate)
     return parser
 
@@ -146,6 +156,43 @@ def cmd_build(args: argparse.Namespace) -> None:
     config.setdefault("format", {})["max_pages"] = args.max_pages
     ensure_dir("outputs/profiles")
     ensure_dir("outputs/diagrams")
+
+    if args.match_pdf_layout:
+        project_profile = parse_project(args.project, "outputs/profiles")
+        layout_profile = analyze_pdf_reference(args.template_reference, "outputs/profiles") if args.template_reference else None
+        requested_out = Path(args.out)
+        build_target = _draft_path(requested_out)
+        out_path = build_pdf_layout_docx(
+            project_profile,
+            config,
+            build_target,
+            layout_profile=layout_profile,
+            target_pages=args.target_pages,
+            toc_with_page_numbers=args.toc_with_page_numbers or True,
+            image_heavy_implementation=args.image_heavy_implementation or True,
+            output_dir="outputs",
+        )
+        validate_docx(out_path, args.template, "outputs")
+        render_issues = validate_rendered_docx(
+            out_path,
+            "outputs",
+            max_pages=args.target_pages + 2,
+            min_pages=max(1, args.target_pages - 2),
+            match_pdf_layout=True,
+        )
+        blocking = [issue for issue in render_issues if issue.severity == "error"]
+        if blocking:
+            _error(f"PDF 版式渲染检查未通过，已保留草稿: {out_path}")
+            _info("请查看 outputs/render_check_report.md、outputs/format_check_report.md 和 outputs/missing_items.md")
+            return
+        ensure_dir(requested_out.parent)
+        shutil.copy2(out_path, requested_out)
+        _ok(f"PDF 原始版对齐论文生成完成: {requested_out}")
+        _info("已生成 outputs/reference_layout_profile.json、outputs/missing_items.md、outputs/render_check_report.md")
+        return
+
+    if not args.template:
+        raise ValueError("普通 build 模式需要提供 --template；PDF 对齐模式请使用 --match-pdf-layout --template-reference reference.pdf。")
 
     template = prepare_template_docx(args.template)
     template_profile = analyze_template(template, "outputs/profiles")
@@ -197,7 +244,7 @@ def cmd_build(args: argparse.Namespace) -> None:
 def cmd_validate(args: argparse.Namespace) -> None:
     report = validate_docx(args.docx, args.template, args.out)
     if args.render_check:
-        validate_rendered_docx(args.docx, args.out, max_pages=args.max_pages)
+        validate_rendered_docx(args.docx, args.out, max_pages=args.max_pages, min_pages=args.min_pages, match_pdf_layout=args.match_pdf_layout)
     _ok(f"格式检查完成: {Path(args.out) / 'format_check_report.md'}")
     _info(report.summary)
 

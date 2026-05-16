@@ -1,5 +1,5 @@
 thesis:
-  title: "基于项目资料的毕业设计说明书"
+  title: "“食惠零食批发网站”设计与实现"
   author: "请填写作者姓名"
   student_id: "请填写学号"
   college: "请填写学院"
@@ -50,3 +50,19 @@ school_format:
   strict_template: true
   cover_pages: 2
   toc_mode: "static"
+
+pdf_layout:
+  match_pdf_layout: true
+  target_pages: 28
+  toc_with_page_numbers: true
+  chinese_section_numbering: true
+  image_heavy_implementation: true
+
+student_name: "（请填写）"
+class_name: "（请填写）"
+department: "信息工程系"
+major: "计算机应用技术"
+advisor_name: "（请填写）"
+project_name: "食惠零食批发网站"
+thesis_title: "“食惠零食批发网站”设计与实现"
+submit_date: "2026年5月16日"

@@ -103,8 +103,8 @@ def _check_captions(paragraphs) -> List[ValidationIssue]:
     figure_seen: dict[int, int] = {}
     table_seen: dict[int, int] = {}
     for index, text, _ in paragraphs:
-        fig = re.match(r"图\s*(\d+)\.(\d+)", text)
-        tab = re.match(r"表\s*(\d+)\.(\d+)", text)
+        fig = re.match(r"图\s*(\d+)[-.](\d+)", text)
+        tab = re.match(r"表\s*(\d+)[-.](\d+)", text)
         if fig:
             _check_sequence("图题", fig, figure_seen, text, index, issues)
         if tab:
@@ -121,15 +121,16 @@ def _check_sequence(kind: str, match, seen: dict[int, int], text: str, index: in
 
 
 def _check_tables(document, paragraphs) -> List[ValidationIssue]:
-    captions = [text for _, text, _ in paragraphs if re.match(r"表\s*\d+\.\d+", text)]
-    if len(captions) < len(document.tables):
+    captions = [text for _, text, _ in paragraphs if re.match(r"表\s*\d+[-.]\d+", text)]
+    content_tables = [table for table in document.tables if not (len(table.rows) == 1 and len(table.columns) == 1)]
+    if len(captions) < len(content_tables):
         return [ValidationIssue(severity="warning", message="存在表格标题缺失或表题未按“表 x.y”编号。", location="表格")]
     return []
 
 
 def _check_images(document, paragraphs) -> List[ValidationIssue]:
     image_count = sum(1 for rel in document.part.rels.values() if "image" in rel.reltype)
-    figure_captions = sum(1 for _, text, _ in paragraphs if re.match(r"图\s*\d+\.\d+", text))
+    figure_captions = sum(1 for _, text, _ in paragraphs if re.match(r"图\s*\d+[-.]\d+", text))
     if figure_captions and image_count < figure_captions:
         return [ValidationIssue(severity="warning", message="图题数量多于图片数量，可能存在图片未插入。", location="图片")]
     return []
